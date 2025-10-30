@@ -1,0 +1,48 @@
+/* src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* ## Theme Sáng (Light) - Duy nhất ## */
+  --bg-primary: #f8fafc;      /* Nền chính - Xám rất nhạt, mềm mại */
+  --bg-secondary: #ffffff;   /* Nền của card, sidebar, navbar - Trắng */
+  --text-primary: #212529;   /* Chữ chính - Gần như đen, độ tương phản cao */
+  --text-secondary: #6c757d; /* Chữ phụ, mô tả - Xám đậm */
+  --color-accent: #0d6efd;   /* Màu nhấn chính (nút, link) - Xanh dương chuyên nghiệp */
+  --color-accent-hover: #0b5ed7;
+  --border-color: #dee2e6;   /* Màu viền */
+}
+
+/* --- Áp dụng Biến Màu cho Toàn bộ Trang --- */
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* --- Các lớp tiện ích tùy chỉnh --- */
+.card-bg {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+.text-main { color: var(--text-primary); }
+.text-subtle { color: var(--text-secondary); }
+.text-accent { color: var(--color-accent); }
+a.text-accent-hover:hover, button.text-accent-hover:hover { color: var(--color-accent-hover); }
+.bg-accent { background-color: var(--color-accent); }
+button.bg-accent-hover:hover { background-color: var(--color-accent-hover); }
+.border-main { border-color: var(--border-color); }
+.border-accent { border-color: var(--color-accent); }
+.homepage-title {
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--border-color);
+}
+.tab-active {
+  color: var(--color-accent);
+  border-bottom: 2px solid var(--color-accent);
+}
+.tab-inactive {
+  color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+}
