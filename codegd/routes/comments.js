@@ -14,7 +14,16 @@ router.get('/', async (req, res) => {
     try {
         const { articleId, questionId } = req.query;
         let query, params;
-        const baseQuery = `SELECT c.id, c.comment, c.created_at, u.name, u.avatar FROM comments c JOIN users u ON c.user_id = u.id`;
+        
+        // Sửa câu truy vấn để lấy cả parent_comment_id
+        const baseQuery = `
+            SELECT 
+                c.id, c.comment, c.created_at, c.parent_comment_id, 
+                u.name, u.avatar 
+            FROM comments c 
+            JOIN users u ON c.user_id = u.id
+        `;
+
         if (articleId) {
             query = `${baseQuery} WHERE c.article_id = ? ORDER BY c.created_at DESC`;
             params = [articleId];
@@ -24,33 +33,54 @@ router.get('/', async (req, res) => {
         } else {
             return res.status(400).json({ message: 'Thiếu ID của bài viết hoặc câu hỏi.' });
         }
+
         const [comments] = await db.query(query, params);
         res.status(200).json(comments);
     } catch (error) {
+        console.error("Lỗi API [GET] /comments:", error);
         res.status(500).json({ message: 'Lỗi server khi lấy bình luận.' });
     }
 });
 
-// POST: Thêm bình luận mới (LOGIC MỚI, AN TOÀN HƠN)
+// POST: Thêm bình luận mới
 router.post('/', isAuthenticated, async (req, res) => {
     try {
-        const { articleId, questionId, comment } = req.body;
+        const { articleId, questionId, parentCommentId, comment } = req.body;
         const user_id = req.user.id;
 
         if (!comment || !comment.trim()) {
             return res.status(400).json({ message: 'Nội dung bình luận không được để trống.' });
         }
-        let newCommentPayload = { user_id, comment };
-        if (articleId) newCommentPayload.article_id = articleId;
-        else if (questionId) newCommentPayload.question_id = questionId;
-        else return res.status(400).json({ message: 'Không xác định được mục để bình luận.' });
+
+        let newCommentPayload = {
+            user_id,
+            comment,
+            parent_comment_id: parentCommentId || null // Lưu ID bình luận cha nếu có
+        };
+
+        if (articleId) {
+            newCommentPayload.article_id = articleId;
+        } else if (questionId) {
+            newCommentPayload.question_id = questionId;
+        } else {
+            return res.status(400).json({ message: 'Không xác định được mục để bình luận.' });
+        }
 
         const [result] = await db.query('INSERT INTO comments SET ?', newCommentPayload);
-        const [newlyCreatedComment] = await db.query(`SELECT c.id, c.comment, c.created_at, u.name, u.avatar FROM comments c JOIN users u ON c.user_id = u.id WHERE c.id = ?`, [result.insertId]);
+        
+        const [newlyCreatedComment] = await db.query(`
+            SELECT 
+                c.id, c.comment, c.created_at, c.parent_comment_id, 
+                u.name, u.avatar 
+            FROM comments c 
+            JOIN users u ON c.user_id = u.id 
+            WHERE c.id = ?
+        `, [result.insertId]);
         
         if (newlyCreatedComment.length === 0) {
             return res.status(404).json({ message: 'Không thể truy xuất bình luận vừa tạo.' });
         }
+
         res.status(201).json(newlyCreatedComment[0]);
     } catch (error) {
         console.error("Lỗi API [POST] /comments:", error);

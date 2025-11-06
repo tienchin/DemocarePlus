@@ -1,118 +1,310 @@
-// src/pages/ProfilePage.js
+import React, { useState, useEffect, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext.js';
+import { 
+    UserIcon, EditIcon, TrashIcon, CommentIcon 
+} from '../components/Icons.js'; 
 
-// --- CODE CŨ GIỮ NGUYÊN: Import thư viện ---
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { Navigate, Link } from 'react-router-dom';
-import api from '../services/api';
+// --- HÀM HELPER ---
+function formatTimeAgo(dateString) {
+  if (!dateString) return "Vừa xong";
+  const date = new Date(dateString);
+  const now = new Date();
+  const seconds = Math.floor((now - date) / 1000);
+  
+  let interval = seconds / 86400;
+  if (interval > 1) return Math.floor(interval) + " ngày trước";
+  interval = seconds / 3600;
+  if (interval > 1) return Math.floor(interval) + " giờ trước";
+  interval = seconds / 60;
+  if (interval > 1) return Math.floor(interval) + " phút trước";
+  return Math.floor(seconds) + " giây trước";
+}
 
-// --- CODE MỚI HOÀN TOÀN: Component con để hiển thị Lịch sử Câu hỏi, có gọi API ---
-const MyPosts = () => {
-  const [posts, setPosts] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+// --- TẠO MỘT SỐ COMPONENT CON CHO TABS ---
 
-  useEffect(() => {
-    const fetchPosts = async () => {
-      try {
-        const res = await api.get('/users/me/questions');
-        setPosts(res.data);
-      } catch (error) {
-        console.error("Lỗi khi tải lịch sử câu hỏi:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchPosts();
-  }, []);
+// 1. Tab Lịch sử Câu hỏi (Hiển thị và Thao tác)
+function QuestionsTab({ questions, deleteQuestion }) {
+    if (questions.length === 0) return <p className="text-gray-500 p-4">Bạn chưa đăng câu hỏi nào.</p>;
 
-  if (isLoading) {
-    return <p className="text-subtle">Đang tải danh sách câu hỏi...</p>;
-  }
+    return (
+        <div className="space-y-4">
+            {questions.map((q) => (
+                <div key={q.id} className="p-4 border border-blue-200 rounded-lg bg-blue-50/50 shadow-sm flex justify-between items-start">
+                    <div className="flex-1 overflow-hidden pr-4">
+                        <Link to={`/q-a/${q.id}`} className="text-lg font-semibold text-sky-800 hover:text-sky-600 truncate block">
+                            {q.title}
+                        </Link>
+                        {/* Hiển thị bản xem trước nội dung */}
+                        <p className="text-sm text-gray-700 truncate mt-1">{q.content}</p>
+                        <p className="text-xs text-gray-500 mt-1">Đăng vào: {formatTimeAgo(q.created_at)}</p>
+                    </div>
+                    <div className="flex space-x-1.5 flex-shrink-0">
+                        {/* Nút Sửa */}
+                        <Link to={`/edit-question/${q.id}`} className="p-1.5 text-sky-500 hover:text-sky-700 rounded-full hover:bg-sky-50 transition" title="Sửa">
+                            <EditIcon className="w-5 h-5" />
+                        </Link>
+                        {/* Nút Xóa */}
+                        <button 
+                            onClick={() => deleteQuestion(q.id)}
+                            className="p-1.5 text-red-500 hover:text-red-700 rounded-full hover:bg-red-50 transition"
+                            title="Xóa"
+                        >
+                            <TrashIcon className="w-5 h-5" />
+                        </button>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
 
-  return (
-    <div>
-      <h3 className="text-xl font-semibold mb-4 text-main">Lịch sử câu hỏi</h3>
-      <div className="border-t border-main pt-4 space-y-3">
-        {posts.length > 0 ? (
-          posts.map(post => (
-            <Link to={`/question/${post.id}`} key={post.id} className="block p-3 border border-main rounded-md hover:bg-secondary transition-colors">
-              <p className="font-semibold text-accent">{post.title}</p>
-              <p className="text-xs text-subtle mt-1">Đã đăng vào: {new Date(post.created_at).toLocaleDateString('vi-VN')}</p>
-            </Link>
-          ))
-        ) : (
-          <p className="text-subtle">Bạn chưa đăng câu hỏi nào.</p>
-        )}
-      </div>
-    </div>
-  );
-};
+// 2. Tab Lịch sử Bình luận (Hiển thị và Thao tác)
+function CommentsTab({ comments, deleteComment }) {
+    if (comments.length === 0) return <p className="text-gray-500 p-4">Bạn chưa có bình luận nào.</p>;
 
-// --- CODE CŨ GIỮ NGUYÊN: Component con cho tab "Bình luận" (tạm thời) ---
-const MyComments = () => (
-  <div>
-    <h3 className="text-xl font-semibold mb-4 text-main">Lịch sử bình luận</h3>
-    <div className="border-t border-main pt-4">
-      <p className="text-subtle">Tính năng đang được phát triển.</p>
-    </div>
-  </div>
-);
+    return (
+        <div className="space-y-4">
+            {comments.map((c) => (
+                <div key={c.id} className="p-4 border border-indigo-200 rounded-lg bg-indigo-50/50 shadow-sm">
+                    <div className="flex justify-between items-start">
+                        <div className="flex-1 overflow-hidden pr-4">
+                            <p className="text-gray-800 italic font-medium">"{c.comment}"</p>
+                            
+                            <p className="text-xs text-gray-500 mt-2">
+                                Đăng: {formatTimeAgo(c.created_at)}
+                            </p>
+                            {/* Sửa lỗi ESLint: Thêm CommentIcon ở đây để sử dụng */}
+                            <div className="text-xs text-gray-500 flex items-center mt-1">
+                                <CommentIcon className="w-4 h-4 mr-1"/> Bình luận
+                            </div>
+                        </div>
+                        <div className="flex space-x-1.5 flex-shrink-0">
+                            {/* Nút Sửa */}
+                            <Link to={`/edit-comment/${c.id}`} className="p-1.5 text-sky-500 hover:text-sky-700 rounded-full hover:bg-sky-50 transition" title="Sửa">
+                                <EditIcon className="w-5 h-5" />
+                            </Link>
+                            {/* Nút Xóa */}
+                            <button 
+                                onClick={() => deleteComment(c.id)}
+                                className="p-1.5 text-red-500 hover:text-red-700 rounded-full hover:bg-red-50 transition"
+                                title="Xóa"
+                            >
+                                <TrashIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </div>
+                    <div className="mt-3 pt-2 border-t border-indigo-200">
+                         <p className="text-sm font-semibold text-indigo-600">
+                            {c.question_title ? 'Về Câu hỏi:' : 'Về Bài viết:'}
+                        </p>
+                        {/* Link đến trang chi tiết của bài đăng/câu hỏi */}
+                        <Link 
+                            to={c.question_id ? `/q-a/${c.question_id}` : `/news/${c.article_id}`} 
+                            className="text-xs text-gray-600 hover:text-sky-700 underline"
+                        >
+                            {c.question_title || c.article_title || 'Xem Chi tiết'}
+                        </Link>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
 
-// --- Component chính của trang cá nhân (Code logic được giữ nguyên) ---
-const ProfilePage = () => {
-  const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState('posts');
-  const [postCount, setPostCount] = useState(0);
-  const [commentCount, setCommentCount] = useState(0);
+// --- COMPONENT CHÍNH PROFILE PAGE ---
+export default function ProfilePage() {
+    const { user, logout } = useAuth();
+    const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchCounts = async () => {
+    // --- STATES ---
+    const [activeTab, setActiveTab] = useState('questions');
+    const [counts, setCounts] = useState({ questions: 0, comments: 0 });
+    const [userQuestions, setUserQuestions] = useState([]);
+    const [userComments, setUserComments] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [apiError, setApiError] = useState(null);
+    
+    // Sửa lỗi ESLint: Xóa API_URL không dùng
+    const API_BASE = '/api/users/me';
+    
+    // --- API HANDLERS ---
+    
+    // 1. Fetch Counts (Số lượng) - SỬA LỖI ESLint
+    const fetchCounts = useCallback(async () => {
+        if (!user) return;
         try {
-            const postRes = await api.get('/users/me/questions/count');
-            setPostCount(postRes.data.count);
-            const commentRes = await api.get('/users/me/comments/count');
-            setCommentCount(commentRes.data.count);
-        } catch (error) {
-            console.error("Lỗi khi lấy số lượng:", error);
+            // API đếm số lượng câu hỏi và bình luận
+            const [qCountRes, cCountRes] = await Promise.all([
+                fetch(`${API_BASE}/questions/count`).then(r => r.json()),
+                fetch(`${API_BASE}/comments/count`).then(r => r.json())
+            ]);
+            setCounts({ 
+                questions: qCountRes.count || 0, 
+                comments: cCountRes.count || 0 
+            });
+        } catch (e) {
+            console.error("Lỗi đếm:", e);
+        }
+    }, [user]); // Đã sửa lỗi dependency: use useCallback
+
+    // 2. Fetch Detailed Data (Chi tiết) - SỬA LỖI ESLint
+    const fetchData = useCallback(async (tab) => {
+        if (!user) return;
+        setIsLoading(true);
+        setApiError(null);
+        try {
+            let url;
+            if (tab === 'questions') {
+                url = `${API_BASE}/questions/detailed`;
+            } else if (tab === 'comments') {
+                url = `${API_BASE}/comments/detailed`;
+            } else {
+                setIsLoading(false);
+                return;
+            }
+
+            const response = await fetch(url);
+            if (response.status === 401) throw new Error("Vui lòng đăng nhập để xem thông tin.");
+            if (!response.ok) throw new Error("Không thể tải dữ liệu chi tiết.");
+
+            const data = await response.json();
+            if (tab === 'questions') setUserQuestions(data);
+            if (tab === 'comments') setUserComments(data);
+
+        } catch (e) {
+            setApiError(e.message);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [user]); // Đã sử dụng user trong fetchData, dependency là đúng
+
+    
+    // 3. Delete Question (Sử dụng API DELETE /api/questions/:id)
+    const handleDeleteQuestion = async (questionId) => {
+        if (!window.confirm('Bạn có chắc chắn muốn xóa câu hỏi này?')) return;
+        try {
+            // Gọi API DELETE /api/questions/:id
+            const response = await fetch(`/api/questions/${questionId}`, { method: 'DELETE' });
+            if (response.status === 403) throw new Error("Bạn không có quyền xóa bài này.");
+            if (!response.ok) throw new Error("Xóa bài viết thất bại.");
+            
+            // Cập nhật giao diện sau khi xóa thành công
+            setUserQuestions(prev => prev.filter(q => q.id !== questionId));
+            fetchCounts(); // Cập nhật lại số đếm
+        } catch (e) {
+            alert(e.message);
         }
     };
-    if (user) {
-        fetchCounts();
-    }
-  }, [user]);
 
-  if (!user) { return <Navigate to="/" />; }
-  
-  const formatCount = (count) => count > 99 ? '99+' : count;
+    // 4. Delete Comment (Sử dụng API DELETE /api/comments/:id)
+    const handleDeleteComment = async (commentId) => {
+        if (!window.confirm('Bạn có chắc chắn muốn xóa bình luận này?')) return;
+        try {
+            // Gọi API DELETE /api/comments/:id
+            const response = await fetch(`/api/comments/${commentId}`, { method: 'DELETE' });
+            if (response.status === 403) throw new Error("Bạn không có quyền xóa bình luận này.");
+            if (!response.ok) throw new Error("Xóa bình luận thất bại.");
+            
+            // Cập nhật giao diện sau khi xóa thành công
+            setUserComments(prev => prev.filter(c => c.id !== commentId));
+            fetchCounts(); // Cập nhật lại số đếm
+        } catch (e) {
+            alert(e.message);
+        }
+    };
 
-  return (
-    <div className="card-bg p-6 md:p-10 rounded-lg max-w-4xl mx-auto">
-      <div className="flex flex-col sm:flex-row items-center gap-6 border-b border-main pb-6 mb-6">
-        <img src={user.avatar} alt="User Avatar" className="w-32 h-32 rounded-full border-4 border-accent shadow-md"/>
-        <div className="text-center sm:text-left">
-          <h1 className="text-3xl font-bold text-main">{user.name}</h1>
-          <p className="text-subtle mt-1">{user.email}</p>
-          <button onClick={logout} className="mt-4 bg-red-500 text-white px-5 py-2 rounded-md font-medium hover:bg-red-600">Đăng xuất</button>
-        </div>
-      </div>
+    // --- EFFECTS ---
+    // Effect 1: Load Counts khi user thay đổi (Đã sửa lỗi dependency)
+    useEffect(() => {
+        if (user) {
+            fetchCounts();
+        } else {
+            // Nếu không đăng nhập, chuyển hướng
+            navigate('/login', { replace: true });
+        }
+    }, [user, navigate, fetchCounts]); 
 
-      <div>
-        <div className="flex border-b border-main mb-6">
-          <button onClick={() => setActiveTab('posts')} className={`px-4 py-2 font-semibold ${activeTab === 'posts' ? 'tab-active' : 'tab-inactive'}`}>
-            Câu hỏi của tôi ({formatCount(postCount)})
-          </button>
-          <button onClick={() => setActiveTab('comments')} className={`px-4 py-2 font-semibold ${activeTab === 'comments' ? 'tab-active' : 'tab-inactive'}`}>
-            Bình luận của tôi ({formatCount(commentCount)})
-          </button>
-          <Link to="/messenger" className="px-4 py-2 font-semibold tab-inactive text-accent-hover">Lịch sử Tư vấn</Link>
+    // Effect 2: Load Chi tiết khi tab thay đổi
+    useEffect(() => {
+        if (user && activeTab !== 'history') {
+            fetchData(activeTab);
+        }
+    }, [activeTab, user, fetchData]); 
+
+    // --- RENDER ---
+    if (!user) return null; // Chờ navigate chuyển hướng
+
+    return (
+        <div className="bg-gray-50 py-10 animate-fade-in">
+            <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+                
+                {/* Header Profile (Redesigned) */}
+                <div className="bg-white p-8 rounded-xl shadow-2xl border border-sky-300 flex items-center gap-6 mb-8">
+                    <div className="flex-shrink-0">
+                        <UserIcon avatar={user.avatar} className="w-24 h-24 text-sky-600 rounded-full bg-sky-100 p-2 border-4 border-white shadow-md" />
+                    </div>
+                    <div className="flex-grow">
+                        <h1 className="text-3xl font-extrabold text-sky-900">{user.name}</h1>
+                        <p className="text-md text-gray-600 font-medium">{user.email}</p>
+                        <button 
+                            onClick={logout}
+                            className="mt-3 bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg text-sm transition shadow-md"
+                        >
+                            Đăng xuất
+                        </button>
+                    </div>
+                </div>
+                
+                {/* Tabs Điều hướng (Styled) */}
+                <div className="flex border-b border-gray-200 mb-6 bg-white rounded-xl shadow-md overflow-hidden">
+                    {/* Tab Câu hỏi */}
+                    <button 
+                        onClick={() => setActiveTab('questions')}
+                        className={`flex-1 py-3 text-center text-lg font-semibold transition-colors ${activeTab === 'questions' ? 'text-sky-600 border-b-4 border-sky-600 bg-sky-50' : 'text-gray-500 hover:text-sky-500 hover:bg-gray-50'}`}
+                    >
+                        Câu hỏi của tôi ({counts.questions})
+                    </button>
+                    {/* Tab Bình luận */}
+                    <button 
+                        onClick={() => setActiveTab('comments')}
+                        className={`flex-1 py-3 text-center text-lg font-semibold transition-colors ${activeTab === 'comments' ? 'text-sky-600 border-b-4 border-sky-600 bg-sky-50' : 'text-gray-500 hover:text-sky-500 hover:bg-gray-50'}`}
+                    >
+                        Bình luận của tôi ({counts.comments})
+                    </button>
+                    {/* Tab Lịch sử tư vấn */}
+                    <button 
+                        onClick={() => setActiveTab('history')}
+                        className={`flex-1 py-3 text-center text-lg font-semibold transition-colors ${activeTab === 'history' ? 'text-sky-600 border-b-4 border-sky-600 bg-sky-50' : 'text-gray-500 hover:text-sky-500 hover:bg-gray-50'}`}
+                    >
+                        Lịch sử Tư vấn
+                    </button>
+                </div>
+
+                {/* Nội dung Tabs */}
+                <div className="bg-white p-6 rounded-xl shadow-lg min-h-[300px] border border-gray-200">
+                    {apiError && <p className="text-red-600 p-4">{apiError}</p>}
+                    {isLoading && <p className="text-center text-gray-500 py-10">Đang tải dữ liệu...</p>}
+
+                    {!isLoading && activeTab === 'questions' && (
+                        <QuestionsTab 
+                            questions={userQuestions} 
+                            deleteQuestion={handleDeleteQuestion}
+                        />
+                    )}
+                    
+                    {!isLoading && activeTab === 'comments' && (
+                        <CommentsTab 
+                            comments={userComments} 
+                            deleteComment={handleDeleteComment}
+                        />
+                    )}
+                    
+                    {!isLoading && activeTab === 'history' && (
+                        <p className="text-gray-700 p-4">Tính năng lịch sử tư vấn AI đang được phát triển.</p>
+                    )}
+                </div>
+            </div>
         </div>
-        
-        <div>
-          {activeTab === 'posts' && <MyPosts />}
-          {activeTab === 'comments' && <MyComments />}
-        </div>
-      </div>
-    </div>
-  );
-};
-export default ProfilePage;
+    );
+}

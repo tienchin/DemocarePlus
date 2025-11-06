@@ -1,119 +1,150 @@
-// src/components/CommentSection.js
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import api from '../services/api';
-import { FaThumbsUp, FaThumbsDown, FaReply } from 'react-icons/fa';
+import { getCommentsByArticle, getCommentsByQuestion, addComment, updateComment, deleteComment } from '../services/api';
 
-const DEFAULT_AVATAR = 'https://gamek.mediacdn.vn/133514250583805952/2023/1/14/vi-daochich-dtcl-6-16736364925801623067077-29-0-657-1200-crop-16736691436801405945754.png';
+export default function CommentSection({ articleId, questionId }) {
+  const { user } = useAuth();
+  const [items, setItems] = useState([]);
+  const [limit] = useState(10);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [alert, setAlert] = useState(null); // {type:'success'|'error', message:string}
+  const [text, setText] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState('');
 
-// --- ĐÂY LÀ PHẦN CODE ĐƯỢC BỔ SUNG ĐẦY ĐỦ ---
-const Comment = ({ comment }) => {
-  const avatarSrc = comment.avatar || DEFAULT_AVATAR;
+  const fetchData = useCallback(async (reset = true) => {
+    const res = articleId
+      ? await getCommentsByArticle(articleId, { limit, offset: reset ? 0 : offset })
+      : await getCommentsByQuestion(questionId, { limit, offset: reset ? 0 : offset });
+    setItems(prev => (reset ? res.data.items : [...prev, ...res.data.items]));
+    setHasMore(res.data.items.length === limit);
+  }, [articleId, questionId, limit, offset]);
+
+  useEffect(() => { setOffset(0); fetchData(true); }, [articleId, questionId, fetchData]);
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    if (!text.trim()) return;
+    try {
+      await addComment(articleId ? { articleId, comment: text } : { questionId, comment: text });
+      setText('');
+      setOffset(0);
+      await fetchData(true);
+      setAlert({ type: 'success', message: 'Đã gửi bình luận.' });
+      setTimeout(() => setAlert(null), 2000);
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || 'Gửi bình luận thất bại.';
+      // eslint-disable-next-line no-console
+      console.error('Add comment failed:', e);
+      setAlert({ type: 'error', message: msg });
+      setTimeout(() => setAlert(null), 2000);
+    }
+  };
+
+  const onStartEdit = (c) => { setEditingId(c.id); setEditText(c.comment); };
+  const onSaveEdit = async () => {
+    try {
+      await updateComment(editingId, { comment: editText });
+      setEditingId(null); setEditText('');
+      setOffset(0);
+      await fetchData(true);
+      setAlert({ type: 'success', message: 'Đã cập nhật bình luận.' });
+      setTimeout(() => setAlert(null), 2000);
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || 'Cập nhật thất bại.';
+      // eslint-disable-next-line no-console
+      console.error('Update comment failed:', e);
+      setAlert({ type: 'error', message: msg });
+      setTimeout(() => setAlert(null), 2000);
+    }
+  };
+  const onDelete = async (id) => {
+    if (!window.confirm('Xóa bình luận này?')) return;
+    try {
+      await deleteComment(id);
+      setOffset(0);
+      await fetchData(true);
+      setAlert({ type: 'success', message: 'Đã xóa bình luận.' });
+      setTimeout(() => setAlert(null), 2000);
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || 'Xóa bình luận thất bại.';
+      // eslint-disable-next-line no-console
+      console.error('Delete comment failed:', e);
+      setAlert({ type: 'error', message: msg });
+      setTimeout(() => setAlert(null), 2000);
+    }
+  };
+
   return (
-    <div className="flex gap-4 py-4">
-      <img src={avatarSrc} alt={comment.name} className="w-10 h-10 rounded-full flex-shrink-0 mt-1 object-cover"/>
-      <div className="flex-grow">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="font-semibold text-main">{comment.name}</p>
-          <p className="text-xs text-subtle">·</p>
-          <p className="text-xs text-subtle">{new Date(comment.created_at).toLocaleString('vi-VN')}</p>
+    <div className="mt-6 space-y-4">
+      <h3 className="text-base sm:text-lg font-semibold text-gray-900">Bình luận</h3>
+
+      {user && (
+        <form onSubmit={onSubmit} className="flex gap-2">
+          <input
+            value={text}
+            onChange={(e)=>setText(e.target.value)}
+            className="flex-1 border rounded-lg px-3 py-2 text-sm"
+            placeholder="Viết bình luận của bạn..."
+          />
+          <button className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm">Gửi</button>
+        </form>
+      )}
+
+      {alert && (
+        <div className={`text-sm rounded-lg px-3 py-2 ${alert.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-rose-50 text-rose-700'}`}>
+          {alert.message}
         </div>
-        <p className="mt-1 text-main whitespace-pre-wrap">{comment.comment}</p>
-        <div className="flex items-center gap-4 mt-2 text-subtle">
-          <button className="flex items-center gap-1 text-accent-hover"><FaThumbsUp /> <span className="text-xs">Thích</span></button>
-          <button className="flex items-center gap-1 text-accent-hover"><FaThumbsDown /></button>
-          <button className="flex items-center gap-1 text-accent-hover text-xs font-semibold"><FaReply /> Trả lời</button>
-        </div>
+      )}
+
+      <div className="space-y-3">
+        {items.map(c => (
+          <div key={c.id} className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
+            <div className="flex items-center gap-3">
+              {c.avatar ? <img src={c.avatar} alt="" className="w-8 h-8 rounded-full" /> : <div className="w-8 h-8 rounded-full bg-gray-200" />}
+              <div className="flex-1">
+                <div className="text-sm font-medium text-gray-900">{c.name || 'Người dùng'}</div>
+                <div className="text-xs text-gray-500">{new Date(c.created_at).toLocaleString()}</div>
+              </div>
+              {user && user.id === c.user_id && (
+                <div className="flex gap-2">
+                  {editingId === c.id ? (
+                    <>
+                      <button onClick={onSaveEdit} className="px-2 py-1 rounded bg-blue-600 text-white text-xs">Lưu</button>
+                      <button onClick={()=>{setEditingId(null);setEditText('');}} className="px-2 py-1 rounded bg-gray-200 text-xs">Hủy</button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={()=>onStartEdit(c)} className="px-2 py-1 rounded bg-blue-600 text-white text-xs">Sửa</button>
+                      <button onClick={()=>onDelete(c.id)} className="px-2 py-1 rounded bg-rose-600 text-white text-xs">Xóa</button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-2 text-sm text-gray-800 whitespace-pre-wrap break-words">
+              {editingId === c.id ? (
+                <textarea value={editText} onChange={(e)=>setEditText(e.target.value)} rows={3} className="w-full border rounded px-3 py-2" />
+              ) : (
+                c.comment
+              )}
+            </div>
+          </div>
+        ))}
+        {items.length === 0 && <div className="text-sm text-gray-500">Chưa có bình luận.</div>}
+        {hasMore && (
+          <div className="pt-2">
+            <button
+              className="px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm"
+              onClick={async ()=>{ const next = offset + limit; setOffset(next); await fetchData(false); }}
+            >
+              Xem thêm
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
-};
-
-// --- Component chính của mục bình luận (Code cũ giữ nguyên) ---
-const CommentSection = ({ articleId, questionId }) => {
-    const [comments, setComments] = useState([]);
-    const [newComment, setNewComment] = useState('');
-    const [isLoading, setIsLoading] = useState(true);
-    const { user } = useAuth();
-
-    useEffect(() => {
-        const fetchComments = async () => {
-            setIsLoading(true);
-            const params = articleId ? { articleId } : { questionId };
-            try {
-                const res = await api.get('/comments', { params });
-                setComments(res.data);
-            } catch (error) {
-                console.error("Lỗi khi tải bình luận:", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchComments();
-    }, [articleId, questionId]);
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!newComment.trim()) return;
-
-        const payload = { comment: newComment };
-        if (articleId) {
-            payload.articleId = articleId;
-        } else if (questionId) {
-            payload.questionId = questionId;
-        } else {
-            alert('Lỗi: Không xác định được mục để bình luận.');
-            return;
-        }
-
-        try {
-            const res = await api.post('/comments', payload);
-            setComments([res.data, ...comments]); 
-            setNewComment('');
-        } catch (error) {
-            console.error("Lỗi khi gửi bình luận:", error);
-            alert('Đã xảy ra lỗi. Vui lòng đăng nhập và thử lại.');
-        }
-    };
-
-    return (
-        <div className="mt-12 pt-8 border-t border-main">
-            <h2 className="text-2xl font-bold mb-6 text-main">Bình luận ({comments.length})</h2>
-            
-            {user ? (
-                <form onSubmit={handleSubmit} className="mb-8">
-                    <textarea 
-                        value={newComment} 
-                        onChange={e => setNewComment(e.target.value)} 
-                        placeholder="Viết bình luận của bạn..." 
-                        rows="4" 
-                        className="w-full p-3 rounded-md border border-main bg-transparent text-main focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-subtle" 
-                    />
-                    <button 
-                        type="submit" 
-                        className="mt-2 bg-accent bg-accent-hover text-white font-bold py-2 px-5 rounded-lg transition-colors"
-                    >
-                        Gửi bình luận
-                    </button>
-                </form>
-            ) : (
-                <p className="text-subtle mb-8 p-4 border border-main rounded-lg">
-                    Vui lòng <Link to="/login" className="font-semibold text-accent underline">đăng nhập</Link> để tham gia bình luận.
-                </p>
-            )}
-
-            <div className="divide-y divide-main">
-                {isLoading ? (
-                    <p className="text-subtle text-center py-4">Đang tải bình luận...</p>
-                ) : comments.length > 0 ? (
-                    comments.map(comment => <Comment key={comment.id} comment={comment} />)
-                ) : (
-                    <p className="text-subtle text-center py-4">Chưa có bình luận nào. Hãy là người đầu tiên!</p>
-                )}
-            </div>
-        </div>
-    );
-};
-
-export default CommentSection;
+}

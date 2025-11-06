@@ -1,44 +1,97 @@
-// src/pages/KnowledgeDetailPage.js
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { medicalKnowledgeBase } from '../knowledgeBase';
+// SỬA LỖI: Đường dẫn import đã được sửa
+import { medicalKnowledgeBase } from '../knowledgeBase.js'; 
+import { ArrowLeftIcon } from '../components/Icons.js'; // SỬA LỖI: Import icon
 
-const KnowledgeDetailPage = () => {
-  const { id } = useParams();
-  const topic = medicalKnowledgeBase.flatMap(cat => cat.subitems).find(item => item.id === id);
+// Hàm helper để tìm bài viết trong cơ sở dữ liệu
+function findArticleById(articleId) {
+  for (const category of medicalKnowledgeBase) {
+    const article = category.subitems.find(item => item.id === articleId);
+    if (article) {
+      return { ...article, categoryName: category.title };
+    }
+  }
+  return null;
+}
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [id]);
+// --- COMPONENT CHÍNH ---
+export default function KnowledgeDetailPage() {
+  const { articleId } = useParams(); // Lấy ID bài viết từ URL
+  const article = findArticleById(articleId);
 
-  if (!topic) {
+  // Xử lý trường hợp không tìm thấy bài viết
+  if (!article) {
     return (
-      <div className="card-bg p-8 rounded-lg text-center">
-        <h2 className="text-2xl font-bold text-main">Không tìm thấy nội dung</h2>
-        <p className="text-subtle mt-4">Nội dung bạn tìm kiếm không tồn tại hoặc đã bị xóa.</p>
-        <Link to="/knowledge" className="mt-6 inline-block bg-accent text-white font-bold py-2 px-6 rounded-lg">
-          Quay về Kho Kiến thức
+      <div className="max-w-4xl mx-auto px-4 py-12 text-center animate-fade-in">
+        <h1 className="text-3xl font-bold text-red-600 mb-4">Không tìm thấy bài viết</h1>
+        <p className="text-lg text-gray-700 mb-6">
+          Bài viết bạn đang tìm kiếm với ID "{articleId}" không tồn tại.
+        </p>
+        <Link 
+          to="/knowledge"
+          className="inline-flex items-center gap-2 bg-sky-600 text-white px-5 py-3 rounded-lg font-semibold hover:bg-sky-700 transition-colors"
+        >
+          <ArrowLeftIcon />
+          Quay lại Kho Kiến thức
         </Link>
       </div>
     );
   }
 
+  // Hiển thị nội dung bài viết
   return (
-    <article className="card-bg p-6 md:p-10 rounded-lg">
-      <h1 className="text-4xl font-bold text-main">{topic.name}</h1>
-      
-      {/* Thông tin Tác giả và Ngày đăng */}
-      <div className="text-subtle text-sm mt-4 mb-6 border-b border-main pb-4">
-        <span>Tác giả: <strong>{topic.author}</strong></span> | <span>Ngày đăng: {topic.date}</span>
-      </div>
-      
-      {/* Nội dung chi tiết */}
-      <div 
-        className="prose prose-lg max-w-none text-main prose-h3:text-accent prose-p:text-subtle"
-        dangerouslySetInnerHTML={{ __html: topic.content }}
-      />
-    </article>
-  );
-};
+    <div className="bg-white py-12 animate-fade-in">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        {/* Nút quay lại */}
+        <div className="mb-6">
+          <Link 
+            to="/knowledge"
+            className="inline-flex items-center gap-2 text-sky-600 hover:text-sky-800 font-medium transition-colors"
+          >
+            <ArrowLeftIcon />
+            Quay lại Kho Kiến thức
+          </Link>
+        </div>
 
-export default KnowledgeDetailPage;
+        {/* Tiêu đề và Thông tin bài viết */}
+        <header className="mb-8">
+          <p className="text-base font-semibold text-sky-600 uppercase">
+            {article.categoryName}
+          </p>
+          <h1 className="mt-2 text-4xl font-extrabold text-sky-900 tracking-tight">
+            {article.name}
+          </h1>
+          <div className="mt-4 flex items-center gap-6 text-sm text-gray-500">
+            <span>
+              Tác giả: <strong className="text-gray-700">{article.author}</strong>
+            </span>
+            <span>
+              Ngày đăng: <strong className="text-gray-700">{article.date}</strong>
+            </span>
+          </div>
+        </header>
+
+        {/* Nội dung bài viết */}
+        <article className="prose prose-lg prose-sky max-w-none">
+          {/* Sử dụng dangerouslySetInnerHTML để render HTML từ database */}
+          <div dangerouslySetInnerHTML={{ __html: article.content }} />
+        </article>
+        
+        {/* Nút quay lại ở cuối trang */}
+        <div className="mt-12 border-t border-gray-200 pt-8">
+          <Link 
+            to="/knowledge"
+            className="inline-flex items-center gap-2 text-sky-600 hover:text-sky-800 font-medium transition-colors"
+          >
+            <ArrowLeftIcon />
+            Quay lại Kho Kiến thức
+          </Link>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
