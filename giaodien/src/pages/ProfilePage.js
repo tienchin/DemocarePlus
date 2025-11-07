@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.js';
+// SỬA LỖI: Import tất cả icon cần thiết
 import { 
-    UserIcon, EditIcon, TrashIcon, CommentIcon 
+    UserIcon, EditIcon, TrashIcon, ClockIcon, CommentIcon 
 } from '../components/Icons.js'; 
 
 // --- HÀM HELPER ---
@@ -112,6 +113,37 @@ function CommentsTab({ comments, deleteComment }) {
     );
 }
 
+// 3. Tab Lịch sử Tư vấn (YÊU CẦU MỚI)
+function ChatHistoryTab({ chatHistory, deleteHistory }) {
+    if (chatHistory.length === 0) return <p className="text-gray-500 p-4">Bạn chưa lưu cuộc tư vấn nào.</p>;
+
+    return (
+        <div className="space-y-4">
+            {chatHistory.map((chat) => (
+                <div key={chat.id} className="p-4 border border-green-200 rounded-lg bg-green-50/50 shadow-sm flex justify-between items-start">
+                    <div className="flex-1 overflow-hidden pr-4">
+                        <Link to={`/profile/history/${chat.id}`} className="text-lg font-semibold text-green-800 hover:text-green-600 truncate block">
+                            {/* 'message' là tiêu đề (tin nhắn đầu tiên) */}
+                            {chat.message}
+                        </Link>
+                        <p className="text-xs text-gray-500 mt-1">Lưu vào: {formatTimeAgo(chat.created_at)}</p>
+                    </div>
+                    <div className="flex-shrink-0">
+                         <button 
+                            onClick={() => deleteHistory(chat.id)}
+                            className="p-1.5 text-red-500 hover:text-red-700 rounded-full hover:bg-red-50 transition"
+                            title="Xóa"
+                        >
+                            <TrashIcon className="w-5 h-5" />
+                        </button>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+
 // --- COMPONENT CHÍNH PROFILE PAGE ---
 export default function ProfilePage() {
     const { user, logout } = useAuth();
@@ -119,36 +151,39 @@ export default function ProfilePage() {
 
     // --- STATES ---
     const [activeTab, setActiveTab] = useState('questions');
-    const [counts, setCounts] = useState({ questions: 0, comments: 0 });
+    const [counts, setCounts] = useState({ questions: 0, comments: 0, history: 0 });
     const [userQuestions, setUserQuestions] = useState([]);
     const [userComments, setUserComments] = useState([]);
+    const [userChatHistory, setUserChatHistory] = useState([]); // State mới
+    
     const [isLoading, setIsLoading] = useState(true);
     const [apiError, setApiError] = useState(null);
     
-    // Sửa lỗi ESLint: Xóa API_URL không dùng
     const API_BASE = '/api/users/me';
     
     // --- API HANDLERS ---
     
-    // 1. Fetch Counts (Số lượng) - SỬA LỖI ESLint
+    // 1. Fetch Counts (Số lượng)
     const fetchCounts = useCallback(async () => {
         if (!user) return;
         try {
-            // API đếm số lượng câu hỏi và bình luận
-            const [qCountRes, cCountRes] = await Promise.all([
+            // API đếm số lượng
+            const [qCountRes, cCountRes, hCountRes] = await Promise.all([
                 fetch(`${API_BASE}/questions/count`).then(r => r.json()),
-                fetch(`${API_BASE}/comments/count`).then(r => r.json())
+                fetch(`${API_BASE}/comments/count`).then(r => r.json()),
+                fetch(`${API_BASE}/chathistory/count`).then(r => r.json()) // API đếm lịch sử chat
             ]);
             setCounts({ 
                 questions: qCountRes.count || 0, 
-                comments: cCountRes.count || 0 
+                comments: cCountRes.count || 0,
+                history: hCountRes.count || 0
             });
         } catch (e) {
             console.error("Lỗi đếm:", e);
         }
-    }, [user]); // Đã sửa lỗi dependency: use useCallback
+    }, [user]);
 
-    // 2. Fetch Detailed Data (Chi tiết) - SỬA LỖI ESLint
+    // 2. Fetch Detailed Data (Chi tiết)
     const fetchData = useCallback(async (tab) => {
         if (!user) return;
         setIsLoading(true);
@@ -159,75 +194,96 @@ export default function ProfilePage() {
                 url = `${API_BASE}/questions/detailed`;
             } else if (tab === 'comments') {
                 url = `${API_BASE}/comments/detailed`;
+            } else if (tab === 'history') { // YÊU CẦU MỚI
+                url = `${API_BASE}/chathistory`;
             } else {
                 setIsLoading(false);
                 return;
             }
 
             const response = await fetch(url);
+            if (response.status === 404) {
+                if (tab === 'questions') setUserQuestions([]);
+                if (tab === 'comments') setUserComments([]);
+                if (tab === 'history') setUserChatHistory([]); 
+                return;
+            }
             if (response.status === 401) throw new Error("Vui lòng đăng nhập để xem thông tin.");
-            if (!response.ok) throw new Error("Không thể tải dữ liệu chi tiết.");
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.message || "Không thể tải dữ liệu chi tiết.");
+            }
 
             const data = await response.json();
             if (tab === 'questions') setUserQuestions(data);
             if (tab === 'comments') setUserComments(data);
+            if (tab === 'history') setUserChatHistory(data); 
 
         } catch (e) {
             setApiError(e.message);
         } finally {
             setIsLoading(false);
         }
-    }, [user]); // Đã sử dụng user trong fetchData, dependency là đúng
+    }, [user]); 
 
     
-    // 3. Delete Question (Sử dụng API DELETE /api/questions/:id)
+    // 3. Delete Question
     const handleDeleteQuestion = async (questionId) => {
         if (!window.confirm('Bạn có chắc chắn muốn xóa câu hỏi này?')) return;
         try {
-            // Gọi API DELETE /api/questions/:id
             const response = await fetch(`/api/questions/${questionId}`, { method: 'DELETE' });
             if (response.status === 403) throw new Error("Bạn không có quyền xóa bài này.");
             if (!response.ok) throw new Error("Xóa bài viết thất bại.");
             
-            // Cập nhật giao diện sau khi xóa thành công
             setUserQuestions(prev => prev.filter(q => q.id !== questionId));
-            fetchCounts(); // Cập nhật lại số đếm
+            fetchCounts(); 
         } catch (e) {
             alert(e.message);
         }
     };
 
-    // 4. Delete Comment (Sử dụng API DELETE /api/comments/:id)
+    // 4. Delete Comment
     const handleDeleteComment = async (commentId) => {
         if (!window.confirm('Bạn có chắc chắn muốn xóa bình luận này?')) return;
         try {
-            // Gọi API DELETE /api/comments/:id
             const response = await fetch(`/api/comments/${commentId}`, { method: 'DELETE' });
             if (response.status === 403) throw new Error("Bạn không có quyền xóa bình luận này.");
             if (!response.ok) throw new Error("Xóa bình luận thất bại.");
             
-            // Cập nhật giao diện sau khi xóa thành công
             setUserComments(prev => prev.filter(c => c.id !== commentId));
-            fetchCounts(); // Cập nhật lại số đếm
+            fetchCounts(); 
+        } catch (e) {
+            alert(e.message);
+        }
+    };
+    
+    // 5. Delete Chat History (YÊU CẦU MỚI)
+    const handleDeleteHistory = async (historyId) => {
+        if (!window.confirm('Bạn có chắc chắn muốn xóa lịch sử tư vấn này?')) return;
+         try {
+            const response = await fetch(`/api/chatbot/history/${historyId}`, { method: 'DELETE' });
+            if (response.status === 403) throw new Error("Bạn không có quyền xóa lịch sử này.");
+            if (!response.ok) throw new Error("Xóa lịch sử thất bại.");
+            
+            setUserChatHistory(prev => prev.filter(h => h.id !== historyId));
+            fetchCounts(); 
         } catch (e) {
             alert(e.message);
         }
     };
 
+
     // --- EFFECTS ---
-    // Effect 1: Load Counts khi user thay đổi (Đã sửa lỗi dependency)
     useEffect(() => {
         if (user) {
             fetchCounts();
         } else {
-            // Nếu không đăng nhập, chuyển hướng
             navigate('/login', { replace: true });
         }
     }, [user, navigate, fetchCounts]); 
 
-    // Effect 2: Load Chi tiết khi tab thay đổi
     useEffect(() => {
-        if (user && activeTab !== 'history') {
+        if (user) {
             fetchData(activeTab);
         }
     }, [activeTab, user, fetchData]); 
@@ -277,31 +333,38 @@ export default function ProfilePage() {
                         onClick={() => setActiveTab('history')}
                         className={`flex-1 py-3 text-center text-lg font-semibold transition-colors ${activeTab === 'history' ? 'text-sky-600 border-b-4 border-sky-600 bg-sky-50' : 'text-gray-500 hover:text-sky-500 hover:bg-gray-50'}`}
                     >
-                        Lịch sử Tư vấn
+                        <div className="flex items-center justify-center gap-2">
+                           <ClockIcon className="w-5 h-5" /> 
+                           Lịch sử Tư vấn ({counts.history})
+                        </div>
                     </button>
                 </div>
 
                 {/* Nội dung Tabs */}
                 <div className="bg-white p-6 rounded-xl shadow-lg min-h-[300px] border border-gray-200">
-                    {apiError && <p className="text-red-600 p-4">{apiError}</p>}
+                    {apiError && <p className="text-red-600 p-4 text-center">{apiError}</p>}
                     {isLoading && <p className="text-center text-gray-500 py-10">Đang tải dữ liệu...</p>}
 
-                    {!isLoading && activeTab === 'questions' && (
+                    {!isLoading && !apiError && activeTab === 'questions' && (
                         <QuestionsTab 
                             questions={userQuestions} 
                             deleteQuestion={handleDeleteQuestion}
                         />
                     )}
                     
-                    {!isLoading && activeTab === 'comments' && (
+                    {!isLoading && !apiError && activeTab === 'comments' && (
                         <CommentsTab 
                             comments={userComments} 
                             deleteComment={handleDeleteComment}
                         />
                     )}
                     
-                    {!isLoading && activeTab === 'history' && (
-                        <p className="text-gray-700 p-4">Tính năng lịch sử tư vấn AI đang được phát triển.</p>
+                    {!isLoading && !apiError && activeTab === 'history' && (
+                        // YÊU CẦU MỚI: Hiển thị danh sách lịch sử chat
+                        <ChatHistoryTab 
+                            chatHistory={userChatHistory}
+                            deleteHistory={handleDeleteHistory}
+                        />
                     )}
                 </div>
             </div>

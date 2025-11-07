@@ -3,10 +3,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useOutletContext, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.js';
 import {
-  SendIcon, ChevronLeftIcon, ChevronRightIcon, BotIcon, UserIcon
-} from '../components/Icons.js';
+  SendIcon, ChevronLeftIcon, ChevronRightIcon, BotIcon, UserIcon,
+  // SỬA LỖI: Import thêm icon Save
+  SaveIcon 
+} from '../components/Icons.js'; 
 
 // --- DỮ LIỆU GIẢ LẬP (MOCK DATA) ---
+// (Dữ liệu này vẫn là giả lập, vì chúng ta chưa kết nối API /api/news)
 const heroBanners = [
   {
     id: 1,
@@ -182,9 +185,11 @@ function HeroLanding() {
 
 function RecentNewsSection({ searchTerm }) {
 
+  // SỬA LỖI (Trang trắng): Xử lý trường hợp searchTerm ban đầu là null
+  const safeSearchTerm = searchTerm || "";
   const filteredNews = recentMedicalNews.filter(news =>
-    news.title.toLowerCase().includes(searchTerm ? searchTerm.toLowerCase() : "") ||
-    news.category.toLowerCase().includes(searchTerm ? searchTerm.toLowerCase() : "")
+    news.title.toLowerCase().includes(safeSearchTerm.toLowerCase()) ||
+    news.category.toLowerCase().includes(safeSearchTerm.toLowerCase())
   );
 
   return (
@@ -277,36 +282,112 @@ function HungHauSection() {
   );
 }
 
+// --- NÂNG CẤP CHATBOT (Kết nối API và Thêm nút Lưu) ---
 function AIAdvisorSection() {
   const { user } = useAuth();
   const [messages, setMessages] = useState([
-    { id: 1, sender: 'bot', text: 'Chào bạn! Tôi là Trợ lý AI của CarePlus. Bạn có triệu chứng gì cần tư vấn sơ bộ không?' }
+    // Tin nhắn chào mừng sẽ được tải từ API
   ]);
   const [userInput, setUserInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [botOptions, setBotOptions] = useState(null); // State cho các nút lựa chọn
+  const [isSaving, setIsSaving] = useState(false); // State cho nút lưu
   const chatEndRef = useRef(null);
+
+  // Gửi tin nhắn chào mừng (hoặc các option) khi component tải
+  useEffect(() => {
+    // Gọi API /interact với tin nhắn rỗng để lấy lời chào/option mặc định
+    handleApiInteract(""); 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const getBotResponse = (input) => {
-    const lowerInput = input.toLowerCase();
-    if (lowerInput.includes('đau bụng dưới') && (lowerInput.includes('tuổi') || lowerInput.includes('tuoi'))) {
-      return { id: Date.now(), sender: 'bot', text: 'Để tôi hiểu rõ hơn, bạn có thể cho biết giới tính của mình là nam hay nữ không?' };
-    }
-    if (lowerInput === 'nữ' || lowerInput === 'nu') {
-       return { id: Date.now(), sender: 'bot', text: 'Cảm ơn bạn. Ở nữ giới 18 tuổi, đau bụng dưới có thể liên quan đến chu kỳ kinh nguyệt (đau bụng kinh). Bạn có thấy triệu chứng này trùng với ngày hành kinh không?' };
-    }
-    if (lowerInput === 'nam') {
-       return { id: Date.now(), sender: 'bot', text: 'Cảm ơn bạn. Ở nam giới, đau bụng dưới có thể liên quan đến tiêu hóa (ví dụ: rối loạn tiêu hóa, viêm ruột thừa) hoặc đường tiết niệu. Cơn đau của bạn có kèm theo sốt hay buồn nôn không?' };
-    }
-    return { id: Date.now(), sender: 'bot', text: 'Tôi đã ghi nhận thông tin. Bạn có thể mô tả thêm về triệu chứng (ví dụ: đau âm ỉ, đau quặn, có sốt không...)?' };
-  }
+  // Hàm gọi API /interact (Khi người dùng gõ)
+  const handleApiInteract = async (messageText) => {
+    setIsTyping(true);
+    setBotOptions(null); // Xóa các nút option cũ
 
+    try {
+      const response = await fetch('/api/chatbot/interact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: messageText })
+      });
+      if (!response.ok) throw new Error('Bot interact API error');
+      
+      const data = await response.json();
+      
+      if (data.type === 'options') {
+        // Nếu bot trả về câu hỏi VÀ các lựa chọn
+        setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: data.question }]);
+        setBotOptions(data.options); // Hiển thị các nút lựa chọn
+      } else {
+        // Nếu bot trả về text (hiện tại logic backend không có)
+        setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: data.answer }]);
+      }
+    } catch (error) {
+      console.error(error);
+      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: 'Xin lỗi, tôi đang gặp sự cố kết nối.' }]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  // --- SỬA LỖI LOGIC CHATBOT (BUG 1 & 2) ---
+  // Hàm gọi API /answer (Khi người dùng chọn option)
+  const handleOptionClick = async (optionId, optionText) => {
+    // 1. Thêm lựa chọn của người dùng vào tin nhắn
+    const userMessage = {
+      id: Date.now(),
+      sender: 'user',
+      text: optionText
+    };
+    setMessages(prev => [...prev, userMessage]);
+    
+    setIsTyping(true);
+    setBotOptions(null); // Xóa các nút option
+    
+    try {
+      // 2. Gửi ID của lựa chọn đến backend
+      const response = await fetch('/api/chatbot/answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ optionId: optionId })
+      });
+      if (!response.ok) throw new Error('Bot answer API error');
+      
+      const data = await response.json();
+
+      // SỬA LỖI LOGIC: Kiểm tra loại phản hồi
+      if (data.type === 'options') {
+        // 3a. Nếu Bot trả về LỰA CHỌN MỚI (ví dụ: các bệnh lý)
+        setMessages(prev => [...prev, { id: Date.now()+1, sender: 'bot', text: data.question }]);
+        setBotOptions(data.options); // Hiển thị các nút lựa chọn mới
+      } else {
+        // 3b. Nếu Bot trả về CÂU TRẢ LỜI CUỐI CÙNG (text)
+        setMessages(prev => [...prev, { id: Date.now()+1, sender: 'bot', text: data.answer }]);
+        
+        // 4. (Tùy chọn) Chỉ quay lại menu chính SAU KHI có câu trả lời cuối cùng.
+        await new Promise(res => setTimeout(res, 1500)); // Chờ 1.5 giây
+        handleApiInteract(""); // Quay lại menu chính
+      }
+      // --- KẾT THÚC SỬA LỖI ---
+
+    } catch (error) {
+      console.error(error); // In ra lỗi 'Bot answer API error'
+      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: 'Xin lỗi, tôi đang gặp sự cố kết nối (answer API).' }]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  // Hàm gửi tin nhắn (khi người dùng gõ và nhấn Enter)
   const handleSendMessage = (e) => {
     e.preventDefault();
-    if (!userInput.trim()) return;
+    if (!userInput.trim() || isTyping || botOptions) return;
 
     const newUserMessage = {
       id: Date.now(),
@@ -315,15 +396,45 @@ function AIAdvisorSection() {
     };
 
     setMessages(prev => [...prev, newUserMessage]);
+    handleApiInteract(userInput); // Gọi API thay vì getBotResponse
     setUserInput('');
-    setIsTyping(true);
-
-    setTimeout(() => {
-      const botResponse = getBotResponse(userInput);
-      setMessages(prev => [...prev, botResponse]);
-      setIsTyping(false);
-    }, 1500);
   };
+
+  // Hàm LƯU LỊCH SỬ (Yêu cầu mới)
+  const handleSaveHistory = async () => {
+    if (!user) {
+      alert("Bạn cần đăng nhập để sử dụng tính năng này.");
+      return;
+    }
+    if (messages.length < 2) {
+      alert("Chưa có nội dung tư vấn để lưu.");
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      // Gọi API POST /api/chatbot/save (từ codegd/routes/chatbot.js)
+      const response = await fetch('/api/chatbot/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: messages }) // Gửi toàn bộ mảng tin nhắn
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || 'Lưu thất bại.');
+      }
+      
+      alert('Lưu lịch sử tư vấn thành công! Bạn có thể xem lại trong Hồ sơ cá nhân.');
+      
+    } catch (error) {
+      console.error(error);
+      alert(`Lỗi: ${error.message}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
 
   return (
     <section id="ai-advisor" className="py-16 sm:py-24 bg-gradient-to-br from-sky-600 to-indigo-700 text-white">
@@ -350,12 +461,29 @@ function AIAdvisorSection() {
                     ? 'bg-sky-600 text-white rounded-br-none'
                     : 'bg-gray-100 text-gray-800 rounded-bl-none'
                 }`}>
-                  <p className="text-sm break-words">{msg.text}</p>
+                  {/* Hiển thị text, xử lý xuống dòng (pre-wrap) */}
+                  <p className="text-sm break-words whitespace-pre-wrap">{msg.text}</p>
                 </div>
 
                 {msg.sender === 'user' && <UserIcon avatar={user?.avatar} />}
               </div>
             ))}
+            
+            {/* Hiển thị các nút Option */}
+            {botOptions && (
+              <div className="flex flex-wrap gap-2 p-2 justify-center">
+                {Object.entries(botOptions).map(([key, value]) => (
+                  <button 
+                    key={key} 
+                    onClick={() => handleOptionClick(key, value)}
+                    className="bg-sky-100 text-sky-800 px-3 py-1.5 rounded-full text-sm font-medium hover:bg-sky-200 transition-colors"
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {isTyping && (
               <div className="flex gap-3 justify-start">
                 <BotIcon className="w-10 h-10 rounded-full bg-sky-600 flex items-center justify-center flex-shrink-0 text-white p-2" />
@@ -367,21 +495,43 @@ function AIAdvisorSection() {
             <div ref={chatEndRef} />
           </div>
 
+          {/* Form nhập liệu */}
           <form onSubmit={handleSendMessage} className="p-4 bg-gray-50 border-t border-gray-200 flex items-center gap-3">
             <input
               type="text"
               value={userInput}
               onChange={(e) => setUserInput(e.target.value)}
-              placeholder="Nhập triệu chứng của bạn..."
-              className="flex-grow p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-sky-500 text-gray-900"
+              // Vô hiệu hóa nếu bot đang gõ HOẶC đang hiển thị lựa chọn
+              disabled={isTyping || !!botOptions} 
+              placeholder={botOptions ? "Vui lòng chọn một mục ở trên..." : "Nhập triệu chứng của bạn..."}
+              className="flex-grow p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-sky-500 text-gray-900 disabled:bg-gray-200"
             />
             <button
               type="submit"
-              className="w-12 h-12 rounded-full bg-sky-600 hover:bg-sky-700 text-white flex items-center justify-center flex-shrink-0 transition-colors shadow"
+              disabled={isTyping || !!botOptions} // Vô hiệu hóa nút gửi
+              className="w-12 h-12 rounded-full bg-sky-600 hover:bg-sky-700 text-white flex items-center justify-center flex-shrink-0 transition-colors shadow disabled:opacity-50"
             >
               <SendIcon />
             </button>
           </form>
+          
+          {/* NÚT LƯU LỊCH SỬ MỚI */}
+          <div className="p-4 bg-gray-100 border-t border-gray-200 text-center">
+            <button
+              onClick={handleSaveHistory}
+              disabled={isSaving || !user || messages.length < 2}
+              className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow disabled:opacity-50"
+            >
+              <SaveIcon className="w-5 h-5" />
+              {isSaving ? 'Đang lưu...' : 'Lưu Lịch sử Tư vấn'}
+            </button>
+            {!user && (
+              <p className="text-xs text-red-600 mt-2">
+                Bạn cần <Link to="/login" className="font-bold underline">đăng nhập</Link> để lưu lịch sử.
+              </p>
+            )}
+          </div>
+
         </div>
       </div>
     </section>
@@ -404,4 +554,3 @@ export default function HomePage() {
     </div>
   );
 }
-

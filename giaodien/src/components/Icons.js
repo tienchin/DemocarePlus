@@ -58,14 +58,14 @@ export function SendIcon() {
   );
 }
 
-export function UserIcon({ avatar }) {
+export function UserIcon({ avatar, className = "w-10 h-10" }) {
   if (avatar) {
     return (
-      <img src={avatar} alt="User Avatar" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+      <img src={avatar} alt="User Avatar" className={`${className} rounded-full object-cover flex-shrink-0`} />
     );
   }
   return (
-    <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0">
+    <div className={`${className} rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0`}>
       <svg className="w-6 h-6 text-gray-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
       </svg>
@@ -114,8 +114,6 @@ export function KeyIcon() {
         </svg>
     );
 }
-
-// --- ICON MỚI BỔ SUNG (ĐỂ SỬA LỖI) ---
 
 export function GoogleIcon() {
   return (
@@ -170,3 +168,20 @@ export function CommentIcon({ className = "w-5 h-5" }) {
   );
 }
 
+// --- BỔ SUNG ICON CHO "LỊCH SỬ TƯ VẤN" ---
+
+export function SaveIcon({ className = "w-5 h-5" }) {
+  return (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+    </svg>
+  );
+}
+
+export function ClockIcon({ className = "w-5 h-5" }) {
+  return (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
