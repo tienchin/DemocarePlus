@@ -1,79 +1,38 @@
 import React, { useState, useEffect, useRef } from 'react';
-// SỬA LỖI: Import useOutletContext để nhận searchTerm từ Layout
 import { useOutletContext, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext.js';
 import {
   SendIcon, ChevronLeftIcon, ChevronRightIcon, BotIcon, UserIcon,
-  // SỬA LỖI: Import thêm icon Save
-  SaveIcon 
-} from '../components/Icons.js'; 
+  SaveIcon, ArrowLeftIcon // Thêm ArrowLeftIcon nếu cần cho trang chủ
+} from '../components/Icons.js';
+// SỬA LỖI: Xóa medicalNewsData vì dữ liệu giờ lấy từ API
+// import { medicalNewsData } from '../newsData.js'; 
 
-// --- DỮ LIỆU GIẢ LẬP (MOCK DATA) ---
-// (Dữ liệu này vẫn là giả lập, vì chúng ta chưa kết nối API /api/news)
+// --- SỬA LỖI: Component render Markdown ---
+function SimpleMarkdown({ text }) {
+  if (!text) return null;
+  const lines = text.split('\n');
+  return (
+    <div className="text-sm break-words">
+      {lines.map((line, lineIndex) => (
+        <p key={lineIndex} className="mb-1 last:mb-0">
+          {line.split(/(\*\*.*?\*\*)/g).map((part, partIndex) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+              return <strong key={partIndex}>{part.substring(2, part.length - 2)}</strong>;
+            }
+            return <span key={partIndex}>{part}</span>;
+          })}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+// --- CÁC COMPONENT CON (Hero, News, HungHau) ---
 const heroBanners = [
-  {
-    id: 1,
-    title: "Kiến thức sức khỏe đáng tin cậy",
-    description: "Đồng hành cùng gia đình bạn cập nhật tin tức y tế, hiểu đúng bệnh và nhận gợi ý từ Trợ lý AI.",
-    imageUrl: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?q=80&w=1600&auto=format&fit=crop",
-    cta1_text: "Tư vấn AI ngay",
-    cta1_link: "#ai-advisor",
-    cta2_text: "Khám phá tin tức",
-    cta2_link: "#recent-news",
-  },
-  {
-    id: 2,
-    title: "Cam kết của chúng tôi",
-    description: "CarePlus cam kết mang đến thông tin Chất lượng – Tận tâm – Khoa học, được kiểm duyệt bởi đội ngũ chuyên gia y tế.",
-    imageUrl: "https://images.unsplash.com/photo-1579684385127-1ef15d508118?q=80&w=1600&auto=format&fit=crop",
-    cta1_text: "Cam kết của chúng tôi",
-    cta1_link: "/about",
-    cta_single: true
-  },
-  {
-    id: 3,
-    title: "Người dùng nói về chúng tôi",
-    description: "\"Một ứng dụng tuyệt vời! Trợ lý AI đã giúp tôi có những gợi ý ban đầu rất hữu ích trước khi quyết định đi khám bác sĩ.\"",
-    imageUrl: "https://images.unsplash.com/photo-1550831107-1553da8c8464?q=80&w=1600&auto=format&fit=crop",
-    cta1_text: "Xem thêm đánh giá",
-    cta1_link: "/q-a",
-    cta2_text: "Bắt đầu ngay",
-    cta2_link: "/register",
-  }
+  { id: 1, title: "Kiến thức sức khỏe đáng tin cậy", description: "Đồng hành cùng gia đình bạn cập nhật tin tức y tế, hiểu đúng bệnh và nhận gợi ý từ Trợ lý AI.", imageUrl: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?q=80&w=1600&auto=format&fit=crop", cta1_text: "Tư vấn AI ngay", cta1_link: "#ai-advisor", cta2_text: "Khám phá tin tức", cta2_link: "#recent-news" },
+  { id: 2, title: "Cam kết của chúng tôi", description: "CarePlus cam kết mang đến thông tin Chất lượng – Tận tâm – Khoa học, được kiểm duyệt bởi đội ngũ chuyên gia y tế.", imageUrl: "https://images.unsplash.com/photo-1579684385127-1ef15d508118?q=80&w=1600&auto=format&fit=crop", cta1_text: "Cam kết của chúng tôi", cta1_link: "/about", cta_single: true },
+  { id: 3, title: "Người dùng nói về chúng tôi", description: "\"Một ứng dụng tuyệt vời! Trợ lý AI đã giúp tôi có những gợi ý ban đầu rất hữu ích trước khi quyết định đi khám bác sĩ.\"", imageUrl: "https://images.unsplash.com/photo-1550831107-1553da8c8464?q=80&w=1600&auto=format&fit=crop", cta1_text: "Xem thêm đánh giá", cta1_link: "/q-a", cta2_text: "Bắt đầu ngay", cta2_link: "/register" }
 ];
-
-const recentMedicalNews = [
-  {
-    id: 'news-1',
-    title: 'Nghiên cứu mới về vaccine mRNA cho bệnh ung thư da',
-    category: 'Nghiên cứu & Thành tựu',
-    date: '30/10/2025',
-    imageUrl: 'https://images.unsplash.com/photo-1629196599220-6820c388f4c0?q=80&w=600&auto=format&fit=crop'
-  },
-  {
-    id: 'news-2',
-    'title': 'Bộ Y tế: Cảnh báo về dịch sốt xuất huyết gia tăng',
-    category: 'Truyền thông Y tế',
-    date: '29/10/2025',
-    imageUrl: 'https://images.unsplash.com/photo-1581056771107-24201018510b?q=80&w=600&auto=format&fit=crop'
-  },
-  {
-    id: 'news-3',
-    'title': 'AI phát hiện sớm Alzheimer qua giọng nói',
-    category: 'Nghiên cứu & Thành tựu',
-    date: '28/10/2025',
-    imageUrl: 'https://images.unsplash.com/photo-1505751172876-8f3b7c54e5de?q=80&w=600&auto=format&fit=crop'
-  },
-  {
-    id: 'news-4',
-    'title': 'Lợi ích của việc ngủ đủ giấc đối với sức khỏe tim mạch',
-    category: 'Thông tin sức khỏe',
-    date: '27/10/2025',
-    imageUrl: 'https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?q=80&w=600&auto=format&fit=crop'
-  }
-];
-
-// --- CÁC COMPONENT CON CỦA TRANG CHỦ ---
 
 function HeroLanding() {
   const [currentBanner, setCurrentBanner] = useState(0);
@@ -98,7 +57,8 @@ function HeroLanding() {
     return () => {
       resetTimeout();
     };
-  }, [currentBanner]);
+  // SỬA LỖI ESLint: Thêm dependency
+  }, [currentBanner, heroBanners.length]); 
 
   const goToSlide = (slideIndex) => {
     setCurrentBanner(slideIndex);
@@ -183,13 +143,41 @@ function HeroLanding() {
   );
 }
 
+// --- SỬA LỖI (IN ĐẬM): RecentNewsSection LẤY DỮ LIỆU TỪ API ---
 function RecentNewsSection({ searchTerm }) {
+  const [latestNews, setLatestNews] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  // Lấy 5 bài viết mới nhất cho trang chủ (có thể điều chỉnh số lượng)
+  const NEWS_LIMIT = 5; 
 
-  // SỬA LỖI (Trang trắng): Xử lý trường hợp searchTerm ban đầu là null
-  const safeSearchTerm = searchTerm || "";
-  const filteredNews = recentMedicalNews.filter(news =>
-    news.title.toLowerCase().includes(safeSearchTerm.toLowerCase()) ||
-    news.category.toLowerCase().includes(safeSearchTerm.toLowerCase())
+  useEffect(() => {
+    const fetchLatestNews = async () => {
+      setIsLoading(true);
+      setError('');
+      try {
+        // Gọi API backend để lấy các bài viết mới nhất
+        const response = await fetch(`/api/news?page=1&limit=${NEWS_LIMIT}`); 
+        if (!response.ok) {
+          throw new Error('Không thể tải tin tức mới nhất.');
+        }
+        const data = await response.json();
+        setLatestNews(data.articles);
+      } catch (err) {
+        console.error("Lỗi khi fetch tin tức mới:", err);
+        setError('Đã có lỗi xảy ra khi tải tin tức.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchLatestNews();
+  }, []); // Chỉ chạy một lần khi component mount
+
+  // Lọc tin tức dựa trên searchTerm (chỉ áp dụng cho tin tức đang hiển thị trên trang chủ)
+  const filteredNews = latestNews.filter(news => 
+    news.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    news.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -204,33 +192,49 @@ function RecentNewsSection({ searchTerm }) {
           </p>
         </div>
 
-        <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
-          {filteredNews.map((news) => (
-            <div key={news.id} className="bg-white rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl">
-              <Link to={`/news/${news.id}`} className="block group">
-                <div className="h-40 overflow-hidden">
-                  <img
-                    src={news.imageUrl}
-                    alt={news.title}
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
-                </div>
-                <div className="p-4">
-                  <p className="text-sm text-sky-600 font-semibold">{news.category}</p>
-                  <h3 className="mt-1 text-base font-bold text-sky-900 group-hover:text-sky-700 h-16">{news.title}</h3>
-                  <p className="mt-2 text-sm text-gray-600">Ngày đăng: {news.date}</p>
-                </div>
-              </Link>
-            </div>
-          ))}
-        </div>
-        {filteredNews.length === 0 && (
+        {isLoading && (
+          <div className="mt-12 text-center">
+            <p className="text-gray-500">Đang tải tin tức...</p>
+          </div>
+        )}
+        {error && (
+          <div className="mt-12 text-center">
+            <p className="text-red-600">{error}</p>
+          </div>
+        )}
+
+        {!isLoading && !error && filteredNews.length > 0 && (
+          <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
+            {filteredNews.map((news) => (
+              <div key={news.id} className="bg-white rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl">
+                {/* SỬA LỖI: Link tới trang chi tiết bài viết mới */}
+                <Link to={`/news/${news.id}`} className="block group"> 
+                  <div className="h-40 overflow-hidden">
+                    <img
+                      src={news.imageUrl || 'https://placehold.co/600x400/e2e8f0/94a3b8?text=Hinh+Anh'}
+                      alt={news.title}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      onError={(e) => { e.currentTarget.src = 'https://placehold.co/600x400/e2e8f0/94a3b8?text=Hinh+Anh'; }}
+                    />
+                  </div>
+                  <div className="p-4">
+                    {/* SỬA LỖI: Giả định category name trả về từ API, hoặc hiển thị mặc định */}
+                    <p className="text-sm text-sky-600 font-semibold">{news.category || 'Tin tức'}</p> 
+                    <h3 className="mt-1 text-base font-bold text-sky-900 group-hover:text-sky-700 h-16">{news.title}</h3>
+                    <p className="mt-2 text-sm text-gray-600">Ngày đăng: {news.date || 'Không rõ'}</p>
+                  </div>
+                </Link>
+              </div>
+            ))}
+          </div>
+        )}
+        {!isLoading && !error && filteredNews.length === 0 && (
           <p className="text-center text-gray-500 mt-12">Không tìm thấy tin tức nào phù hợp.</p>
         )}
 
         <div className="mt-12 text-center">
           <Link
-            to="/news-archive"
+            to="/news-archive" 
             className="inline-flex items-center justify-center rounded-lg bg-sky-600 hover:bg-sky-700 text-white px-6 py-3 font-semibold shadow transition-colors duration-200"
           >
             Xem tất cả Tin tức
@@ -240,6 +244,7 @@ function RecentNewsSection({ searchTerm }) {
     </section>
   );
 }
+
 
 function HungHauSection() {
   return (
@@ -282,159 +287,17 @@ function HungHauSection() {
   );
 }
 
-// --- NÂNG CẤP CHATBOT (Kết nối API và Thêm nút Lưu) ---
-function AIAdvisorSection() {
-  const { user } = useAuth();
-  const [messages, setMessages] = useState([
-    // Tin nhắn chào mừng sẽ được tải từ API
-  ]);
-  const [userInput, setUserInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [botOptions, setBotOptions] = useState(null); // State cho các nút lựa chọn
-  const [isSaving, setIsSaving] = useState(false); // State cho nút lưu
+// --- TÁI CẤU TRÚC AIAdvisorSection ---
+// Component này giờ là "dumb" (ngu), nó nhận state và hàm từ Layout
+function AIAdvisorSection({ chatState, chatActions }) {
+  // Logic đã được chuyển lên Layout.js
+  const { user, messages, userInput, isTyping, botOptions, isSaving } = chatState;
+  const { onSendMessage, onOptionClick, onSaveHistory, onUserInput } = chatActions;
   const chatEndRef = useRef(null);
-
-  // Gửi tin nhắn chào mừng (hoặc các option) khi component tải
-  useEffect(() => {
-    // Gọi API /interact với tin nhắn rỗng để lấy lời chào/option mặc định
-    handleApiInteract(""); 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  // Hàm gọi API /interact (Khi người dùng gõ)
-  const handleApiInteract = async (messageText) => {
-    setIsTyping(true);
-    setBotOptions(null); // Xóa các nút option cũ
-
-    try {
-      const response = await fetch('/api/chatbot/interact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: messageText })
-      });
-      if (!response.ok) throw new Error('Bot interact API error');
-      
-      const data = await response.json();
-      
-      if (data.type === 'options') {
-        // Nếu bot trả về câu hỏi VÀ các lựa chọn
-        setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: data.question }]);
-        setBotOptions(data.options); // Hiển thị các nút lựa chọn
-      } else {
-        // Nếu bot trả về text (hiện tại logic backend không có)
-        setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: data.answer }]);
-      }
-    } catch (error) {
-      console.error(error);
-      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: 'Xin lỗi, tôi đang gặp sự cố kết nối.' }]);
-    } finally {
-      setIsTyping(false);
-    }
-  };
-
-  // --- SỬA LỖI LOGIC CHATBOT (BUG 1 & 2) ---
-  // Hàm gọi API /answer (Khi người dùng chọn option)
-  const handleOptionClick = async (optionId, optionText) => {
-    // 1. Thêm lựa chọn của người dùng vào tin nhắn
-    const userMessage = {
-      id: Date.now(),
-      sender: 'user',
-      text: optionText
-    };
-    setMessages(prev => [...prev, userMessage]);
-    
-    setIsTyping(true);
-    setBotOptions(null); // Xóa các nút option
-    
-    try {
-      // 2. Gửi ID của lựa chọn đến backend
-      const response = await fetch('/api/chatbot/answer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ optionId: optionId })
-      });
-      if (!response.ok) throw new Error('Bot answer API error');
-      
-      const data = await response.json();
-
-      // SỬA LỖI LOGIC: Kiểm tra loại phản hồi
-      if (data.type === 'options') {
-        // 3a. Nếu Bot trả về LỰA CHỌN MỚI (ví dụ: các bệnh lý)
-        setMessages(prev => [...prev, { id: Date.now()+1, sender: 'bot', text: data.question }]);
-        setBotOptions(data.options); // Hiển thị các nút lựa chọn mới
-      } else {
-        // 3b. Nếu Bot trả về CÂU TRẢ LỜI CUỐI CÙNG (text)
-        setMessages(prev => [...prev, { id: Date.now()+1, sender: 'bot', text: data.answer }]);
-        
-        // 4. (Tùy chọn) Chỉ quay lại menu chính SAU KHI có câu trả lời cuối cùng.
-        await new Promise(res => setTimeout(res, 1500)); // Chờ 1.5 giây
-        handleApiInteract(""); // Quay lại menu chính
-      }
-      // --- KẾT THÚC SỬA LỖI ---
-
-    } catch (error) {
-      console.error(error); // In ra lỗi 'Bot answer API error'
-      setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: 'Xin lỗi, tôi đang gặp sự cố kết nối (answer API).' }]);
-    } finally {
-      setIsTyping(false);
-    }
-  };
-
-  // Hàm gửi tin nhắn (khi người dùng gõ và nhấn Enter)
-  const handleSendMessage = (e) => {
-    e.preventDefault();
-    if (!userInput.trim() || isTyping || botOptions) return;
-
-    const newUserMessage = {
-      id: Date.now(),
-      sender: 'user',
-      text: userInput
-    };
-
-    setMessages(prev => [...prev, newUserMessage]);
-    handleApiInteract(userInput); // Gọi API thay vì getBotResponse
-    setUserInput('');
-  };
-
-  // Hàm LƯU LỊCH SỬ (Yêu cầu mới)
-  const handleSaveHistory = async () => {
-    if (!user) {
-      alert("Bạn cần đăng nhập để sử dụng tính năng này.");
-      return;
-    }
-    if (messages.length < 2) {
-      alert("Chưa có nội dung tư vấn để lưu.");
-      return;
-    }
-    
-    setIsSaving(true);
-    try {
-      // Gọi API POST /api/chatbot/save (từ codegd/routes/chatbot.js)
-      const response = await fetch('/api/chatbot/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: messages }) // Gửi toàn bộ mảng tin nhắn
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.message || 'Lưu thất bại.');
-      }
-      
-      alert('Lưu lịch sử tư vấn thành công! Bạn có thể xem lại trong Hồ sơ cá nhân.');
-      
-    } catch (error) {
-      console.error(error);
-      alert(`Lỗi: ${error.message}`);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
 
   return (
     <section id="ai-advisor" className="py-16 sm:py-24 bg-gradient-to-br from-sky-600 to-indigo-700 text-white">
@@ -450,32 +313,30 @@ function AIAdvisorSection() {
           </p>
         </div>
 
+        {/* Đây là khung chat trên trang chủ, nó dùng chung state với Modal */}
         <div className="bg-white rounded-2xl shadow-2xl max-w-lg mx-auto overflow-hidden">
           <div className="h-96 overflow-y-auto p-4 space-y-4">
             {messages.map((msg) => (
               <div key={msg.id} className={`flex gap-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {msg.sender === 'bot' && <BotIcon className="w-10 h-10 rounded-full bg-sky-600 flex items-center justify-center flex-shrink-0 text-white p-2" />}
-
                 <div className={`rounded-2xl p-3 max-w-[80%] ${
                   msg.sender === 'user'
                     ? 'bg-sky-600 text-white rounded-br-none'
                     : 'bg-gray-100 text-gray-800 rounded-bl-none'
                 }`}>
-                  {/* Hiển thị text, xử lý xuống dòng (pre-wrap) */}
-                  <p className="text-sm break-words whitespace-pre-wrap">{msg.text}</p>
+                  {/* SỬA LỖI (IN ĐẬM): Sử dụng SimpleMarkdown */}
+                  <SimpleMarkdown text={msg.text} />
                 </div>
-
                 {msg.sender === 'user' && <UserIcon avatar={user?.avatar} />}
               </div>
             ))}
             
-            {/* Hiển thị các nút Option */}
             {botOptions && (
               <div className="flex flex-wrap gap-2 p-2 justify-center">
                 {Object.entries(botOptions).map(([key, value]) => (
                   <button 
                     key={key} 
-                    onClick={() => handleOptionClick(key, value)}
+                    onClick={() => onOptionClick(key, value)}
                     className="bg-sky-100 text-sky-800 px-3 py-1.5 rounded-full text-sm font-medium hover:bg-sky-200 transition-colors"
                   >
                     {value}
@@ -496,29 +357,28 @@ function AIAdvisorSection() {
           </div>
 
           {/* Form nhập liệu */}
-          <form onSubmit={handleSendMessage} className="p-4 bg-gray-50 border-t border-gray-200 flex items-center gap-3">
+          <form onSubmit={onSendMessage} className="p-4 bg-gray-50 border-t border-gray-200 flex items-center gap-3">
             <input
               type="text"
               value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
-              // Vô hiệu hóa nếu bot đang gõ HOẶC đang hiển thị lựa chọn
+              onChange={onUserInput} // Dùng hàm từ props
               disabled={isTyping || !!botOptions} 
               placeholder={botOptions ? "Vui lòng chọn một mục ở trên..." : "Nhập triệu chứng của bạn..."}
               className="flex-grow p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-sky-500 text-gray-900 disabled:bg-gray-200"
             />
             <button
               type="submit"
-              disabled={isTyping || !!botOptions} // Vô hiệu hóa nút gửi
+              disabled={isTyping || !!botOptions} 
               className="w-12 h-12 rounded-full bg-sky-600 hover:bg-sky-700 text-white flex items-center justify-center flex-shrink-0 transition-colors shadow disabled:opacity-50"
             >
               <SendIcon />
             </button>
           </form>
           
-          {/* NÚT LƯU LỊCH SỬ MỚI */}
+          {/* Nút Lưu Lịch sử */}
           <div className="p-4 bg-gray-100 border-t border-gray-200 text-center">
             <button
-              onClick={handleSaveHistory}
+              onClick={onSaveHistory} // Dùng hàm từ props
               disabled={isSaving || !user || messages.length < 2}
               className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow disabled:opacity-50"
             >
@@ -531,7 +391,6 @@ function AIAdvisorSection() {
               </p>
             )}
           </div>
-
         </div>
       </div>
     </section>
@@ -541,16 +400,25 @@ function AIAdvisorSection() {
 
 // --- COMPONENT CHÍNH CỦA TRANG CHỦ ---
 export default function HomePage() {
-  // SỬA LỖI: Lấy searchTerm từ context của Layout (do <Outlet> cung cấp)
-  const searchTerm = useOutletContext();
+  // SỬA LỖI: Lấy searchTerm VÀ "bộ não" chatbot từ Layout
+  const context = useOutletContext();
+  
+  // SỬA LỖI: Xử lý trường hợp context chưa sẵn sàng (khi Layout đang tải)
+  if (!context) {
+    return <div className="animate-pulse p-10 text-center">Đang tải trang chủ...</div>; 
+  }
+
+  const { searchTerm, chatState, chatActions } = context;
 
   return (
     <div className="animate-fade-in">
       <HeroLanding />
-      {/* SỬA LỖI: Truyền searchTerm thật xuống component tin tức */}
-      <RecentNewsSection searchTerm={searchTerm} />
+      {/* SỬA LỖI: Truyền searchTerm THẬT xuống RecentNewsSection */}
+      {/* Lưu ý: Tìm kiếm hiện tại chỉ lọc trên 5 bài hiển thị trên trang chủ */}
+      <RecentNewsSection searchTerm={searchTerm} /> 
       <HungHauSection />
-      <AIAdvisorSection />
+      {/* SỬA LỖI: Truyền "bộ não" chatbot xuống AIAdvisorSection */}
+      <AIAdvisorSection chatState={chatState} chatActions={chatActions} />
     </div>
   );
 }

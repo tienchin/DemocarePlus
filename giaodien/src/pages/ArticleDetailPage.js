@@ -1,75 +1,104 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext.js';
-// SỬA LỖI: Bổ sung EditIcon, TrashIcon để sử dụng biến 'user'
-import { ArrowLeftIcon, EditIcon, TrashIcon } from '../components/Icons.js'; 
+// SỬA LỖI: Thêm useParams để lấy ID bài viết từ URL
+import { Link, useParams, useSearchParams } from 'react-router-dom'; 
+// SỬA LỖI: Xóa 'medicalNewsData' (không dùng nữa), thêm icon
+import { SearchIcon, ArrowLeftIcon } from '../components/Icons.js'; 
 
-// Hàm helper để định dạng thời gian
+// --- HÀM HELPER (Định dạng ngày) ---
+// Giữ nguyên hoặc có thể copy lại từ HomePage.js nếu cần
 function formatFullDate(dateString) {
   if (!dateString) return "Không rõ";
   try {
-    return new Date(dateString).toLocaleDateString('vi-VN', {
+    // Giả định dateString từ API là ISO format (e.g., "2025-11-10T10:00:00Z") hoặc timestamp
+    // Nếu API trả về định dạng khác, bạn cần điều chỉnh cách tạo new Date()
+    const date = new Date(dateString); 
+    return date.toLocaleDateString('vi-VN', {
       year: 'numeric', month: 'long', day: 'numeric',
     });
   } catch (e) {
-    return "Không rõ";
+    console.error("Lỗi định dạng ngày:", e);
+    return dateString; // Trả về chuỗi gốc nếu lỗi
   }
 }
 
-// --- COMPONENT CHÍNH ---
+// --- SỬA LỖI: Component render Markdown ---
+// Bạn có thể copy component này từ HomePage.js sang đây, hoặc đảm bảo nó được import từ một file chung
+function SimpleMarkdown({ text }) {
+  if (!text) return null;
+  const lines = text.split('\n');
+  return (
+    <div className="text-sm break-words">
+      {lines.map((line, lineIndex) => (
+        <p key={lineIndex} className="mb-1 last:mb-0">
+          {line.split(/(\*\*.*?\*\*)/g).map((part, partIndex) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+              return <strong key={partIndex}>{part.substring(2, part.length - 2)}</strong>;
+            }
+            return <span key={partIndex}>{part}</span>;
+          })}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+// --- COMPONENT CHÍNH CHI TIẾT BÀI VIẾT ---
 export default function ArticleDetailPage() {
-  const { id } = useParams(); // Lấy 'id' từ route /news/:id
-  const { user } = useAuth(); // SỬA LỖI: Biến 'user' được sử dụng ở đây
-  
+  // SỬA LỖI: Lấy ID bài viết từ URL
+  const { id } = useParams(); 
   const [article, setArticle] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState('');
 
   useEffect(() => {
-    // ... (logic fetch bài viết) ...
-    const fetchArticle = async () => {
+    const fetchArticleDetail = async () => {
       setIsLoading(true);
       setApiError('');
       try {
+        // Gọi API backend để lấy chi tiết bài viết theo ID
         const response = await fetch(`/api/news/${id}`); 
-        
-        if (response.status === 404) {
-          throw new Error('404 - Không tìm thấy bài viết');
-        }
         if (!response.ok) {
-          throw new Error('Không thể tải bài viết.');
+          // Xử lý các lỗi HTTP khác nhau
+          if (response.status === 404) {
+            throw new Error('Bài viết không tìm thấy.');
+          }
+          throw new Error('Không thể tải chi tiết bài viết.');
         }
-        
         const data = await response.json();
-        setArticle(data);
-        
+        setArticle(data); // Giả định API trả về object bài viết
       } catch (error) {
-        console.error(error);
+        console.error("Lỗi khi fetch chi tiết bài viết:", error);
         setApiError(error.message);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchArticle();
-  }, [id]);
+    if (id) { // Chỉ gọi API nếu có ID
+      fetchArticleDetail();
+    } else {
+      setApiError('Không có ID bài viết nào được cung cấp.');
+      setIsLoading(false);
+    }
+  }, [id]); // Chạy lại khi ID bài viết thay đổi
 
-  // Xử lý khi đang tải
+  // --- RENDER KHI ĐANG TẢI ---
   if (isLoading) {
-     return <p className="text-center text-gray-500 py-20">Đang tải bài viết...</p>;
-  }
-  
-  // Xử lý khi không tìm thấy (lỗi 404)
-  if (!article || apiError.includes('404')) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-12 text-center animate-fade-in">
-        <h1 className="text-3xl font-bold text-red-600 mb-4">Không tìm thấy bài viết</h1>
-        <p className="text-lg text-gray-700 mb-6">
-          Tin tức bạn đang tìm kiếm với ID "{id}" không tồn tại.
-        </p>
+      <div className="py-12 text-center animate-pulse">
+        <p className="text-gray-500">Đang tải chi tiết bài viết...</p>
+      </div>
+    );
+  }
+
+  // --- RENDER KHI CÓ LỖI ---
+  if (apiError) {
+    return (
+      <div className="py-12 text-center">
+        <p className="text-red-600">{apiError}</p>
         <Link 
           to="/"
-          className="inline-flex items-center gap-2 bg-sky-600 text-white px-5 py-3 rounded-lg font-semibold hover:bg-sky-700 transition-colors"
+          className="mt-4 inline-flex items-center gap-2 text-sky-600 hover:text-sky-800 font-medium transition-colors"
         >
           <ArrowLeftIcon />
           Quay lại Trang chủ
@@ -77,57 +106,73 @@ export default function ArticleDetailPage() {
       </div>
     );
   }
-  
-  // Hiển thị nội dung bài viết
+
+  // --- RENDER NỘI DUNG BÀI VIẾT ---
   return (
-    <div className="bg-white py-12 animate-fade-in">
+    <article className="bg-gray-50 py-12 animate-fade-in">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        <div className="mb-6 flex justify-between items-center">
+        {/* Nút quay lại */}
+        <div className="mb-8">
           <Link 
-            to="/"
+            to="/news-archive" // Quay lại trang lưu trữ tin tức
             className="inline-flex items-center gap-2 text-sky-600 hover:text-sky-800 font-medium transition-colors"
           >
             <ArrowLeftIcon />
-            Quay lại Trang chủ
+            Quay lại Lưu trữ Tin tức
           </Link>
-          
-          {/* SỬA LỖI ESLINT: Sử dụng biến user */}
-          {user && user.provider === 'admin' && ( 
-            <div className="flex gap-2">
-              <button className="text-gray-500 hover:text-sky-600 p-2" title="Chỉnh sửa"><EditIcon /></button>
-              <button className="text-gray-500 hover:text-red-600 p-2" title="Xóa bài viết"><TrashIcon /></button>
-            </div>
-          )}
         </div>
 
-        <header className="mb-8">
-          <h1 className="mt-2 text-4xl font-extrabold text-sky-900 tracking-tight">
-            {article.title}
-          </h1>
-          <div className="mt-4 flex items-center gap-6 text-sm text-gray-500">
-            <span>
-              Tác giả: <strong className="text-gray-700">{article.user_name || 'CarePlus Team'}</strong>
-            </span>
-            <span>
-              Ngày đăng: <strong className="text-gray-700">{formatFullDate(article.created_at)}</strong>
-            </span>
-          </div>
-        </header>
+        {article ? (
+          <>
+            {/* Tiêu đề và thông tin */}
+            <div className="text-center mb-8">
+              <p className="text-sm text-sky-600 font-semibold mb-2">{article.category || 'Tin tức'}</p>
+              <h1 className="text-4xl font-extrabold text-sky-900 sm:text-5xl leading-tight">
+                {article.title}
+              </h1>
+              <div className="mt-4 text-lg text-sky-700 flex flex-col sm:flex-row sm:justify-center gap-2 sm:gap-4">
+                {/* SỬA LỖI: Hiển thị ngày và tác giả (nếu có từ API) */}
+                {article.author && <span className="font-medium">Tác giả: {article.author}</span>}
+                <span>Ngày đăng: {formatFullDate(article.created_at || article.date)}</span> {/* Ưu tiên created_at từ API, fallback sang date cũ nếu cần */}
+              </div>
+            </div>
 
-        {article.imageUrl && (
-          <img 
-            src={article.imageUrl} 
-            alt={article.title} 
-            className="w-full h-96 object-cover rounded-xl shadow-lg mb-8" 
-          />
+            {/* Hình ảnh */}
+            <div className="relative h-64 sm:h-80 md:h-96 lg:h-[500px] overflow-hidden rounded-xl shadow-lg mb-8">
+              <img
+                src={article.imageUrl || 'https://placehold.co/1200x500/e2e8f0/94a3b8?text=Hinh+Anh'}
+                alt={article.title}
+                className="w-full h-full object-cover"
+                onError={(e) => { e.currentTarget.src = 'https://placehold.co/1200x500/e2e8f0/94a3b8?text=Hinh+Anh'; }} // Fallback image
+              />
+            </div>
+
+            {/* Nội dung bài viết */}
+            <div className="prose max-w-none text-lg text-sky-900 leading-relaxed">
+              {/* SỬA LỖI: Sử dụng SimpleMarkdown cho nội dung */}
+              <SimpleMarkdown text={article.content} />
+            </div>
+
+            {/* Link nguồn (nếu có) */}
+            {article.source && (
+              <div className="mt-8 text-center">
+                <a
+                  href={article.source}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sky-600 hover:text-sky-800 font-medium transition-colors"
+                >
+                  Nguồn bài viết <ArrowLeftIcon className="rotate-180 w-4 h-4" />
+                </a>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-center text-gray-500">Không có dữ liệu bài viết nào.</p>
         )}
 
-        <article className="prose prose-lg prose-sky max-w-none">
-          <div dangerouslySetInnerHTML={{ __html: article.content }} />
-        </article>
-        
       </div>
-    </div>
+    </article>
   );
 }

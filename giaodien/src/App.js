@@ -15,7 +15,7 @@ import ProfilePage from './pages/ProfilePage.js';
 import AboutPage from './pages/AboutPage.js';     
 import KnowledgeDetailPage from './pages/KnowledgeDetailPage.js'; 
 import QandADetailPage from './pages/QandADetailPage.js'; 
-
+import NewsArchivePage from './pages/NewsArchivePage.js';
 // SỬA LỖI: Bổ sung trang chi tiết Tin tức/Bài viết
 import ArticleDetailPage from './pages/ArticleDetailPage.js'; 
 
@@ -42,6 +42,7 @@ export default function App() {
           {/* SỬA LỖI: Thêm route cho Tin tức (từ HomePage) */}
           <Route path="news/:id" element={<ArticleDetailPage />} />
           {/* (Route này sẽ khớp với /news/news-1, /news/news-2, ...) */}
+          
 
         </Route>
 
@@ -50,7 +51,7 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/change-password" element={<ChangePasswordPage />} />
-        
+        <Route path="news-archive" element={<NewsArchivePage />} />
         {/* <Route path="*" element={<NotFoundPage />} /> */}
       </Routes>
     </AuthProvider>
